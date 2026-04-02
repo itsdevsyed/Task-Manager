@@ -1,0 +1,36 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated"
+}
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  password   String
+  name       String
+  role       String   @default("USER")    // store "ADMIN" or "USER"
+  created_at DateTime @default(now())
+
+  tasksAssigned Task[] @relation("AssignedTasks")
+  tasksCreated  Task[] @relation("CreatedTasks")
+}
+
+model Task {
+  id           String   @id @default(uuid())
+  title        String
+  description  String?
+  status       String   @default("TODO")      // "TODO", "IN_PROGRESS", "DONE"
+  priority     String   @default("MEDIUM")    // "LOW", "MEDIUM", "HIGH"
+  due_date     DateTime?
+  assigned_to  String
+  created_by   String
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  assignedUser User @relation("AssignedTasks", fields: [assigned_to], references: [id])
+  createdUser  User @relation("CreatedTasks", fields: [created_by], references: [id])
+}
