@@ -1,5 +1,9 @@
-const BASE_URL = "http://localhost:3001";
-
+/**
+ * BASE_URL logic:
+ * On Render: Uses the VITE_API_URL you set in the dashboard.
+ * Locally: Defaults to localhost:3001.
+ */
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
@@ -9,6 +13,7 @@ const getAuthHeaders = () => {
   };
 };
 
+// --- AUTH API ---
 
 export const signupApi = async (data: any) => {
   const res = await fetch(`${BASE_URL}/auth/signup`, {
@@ -39,57 +44,5 @@ export const loginApi = async (data: any) => {
     err.response = { data: result };
     throw err;
   }
-
   return result;
-};
-
-
-export const getTasksApi = async (params: any = {}) => {
-  const query = new URLSearchParams(params).toString();
-
-  const res = await fetch(`${BASE_URL}/tasks?${query}`, {
-    method: "GET",
-    headers: getAuthHeaders(),
-  });
-
-  const result = await res.json();
-  if (!res.ok) throw new Error(result.error || "Failed to fetch tasks");
-  return result;
-};
-
-export const createTaskApi = async (data: any) => {
-  const res = await fetch(`${BASE_URL}/tasks`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify(data),
-  });
-
-  const result = await res.json();
-  if (!res.ok) throw new Error(result.error || "Failed to create task");
-  return result;
-};
-
-export const updateTaskApi = async (id: string, data: any) => {
-  const res = await fetch(`${BASE_URL}/tasks/${id}`, {
-    method: "PATCH",
-    headers: getAuthHeaders(),
-    body: JSON.stringify(data),
-  });
-
-  const result = await res.json();
-  if (!res.ok) throw new Error(result.error || "Failed to update task");
-  return result;
-};
-
-export const deleteTaskApi = async (id: string) => {
-  const res = await fetch(`${BASE_URL}/tasks/${id}`, {
-    method: "DELETE",
-    headers: getAuthHeaders(),
-  });
-
-  if (!res.ok) {
-    const result = await res.json();
-    throw new Error(result.error || "Failed to delete task");
-  }
-  return true;
 };

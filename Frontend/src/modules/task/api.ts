@@ -1,8 +1,10 @@
-const BASE_URL = "http://localhost:3001";
-
 /**
- * Helper to get the token for Protected Routes
+ * BASE_URL logic:
+ * On Render: Uses the VITE_API_URL you set in the dashboard.
+ * Locally: Defaults to localhost:3001.
  */
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
   return {
@@ -10,25 +12,6 @@ const getAuthHeaders = () => {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 };
-
-// Define the shape of our Task for TypeScript
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  status: "TODO" | "IN_PROGRESS" | "DONE";
-  priority: "LOW" | "MEDIUM" | "HIGH";
-  due_date?: string;
-}
-
-// Define the shape of the Task List response
-interface GetTasksResponse {
-  tasks: Task[];
-  total: number;
-  completedCount: number;
-  page: number;
-  limit: number;
-}
 
 // --- AUTH API ---
 
@@ -66,12 +49,10 @@ export const loginApi = async (data: any) => {
 
 // --- TASKS API (PROTECTED) ---
 
-export const getTasksApi = async (params: any = {}): Promise<GetTasksResponse> => {
-  // CLEANER: Remove undefined or null values so they don't appear in the URL
+export const getTasksApi = async (params: any = {}) => {
   const cleanParams = Object.fromEntries(
     Object.entries(params).filter(([_, value]) => value != null && value !== "")
   );
-
   const query = new URLSearchParams(cleanParams as any).toString();
 
   const res = await fetch(`${BASE_URL}/tasks?${query}`, {
@@ -81,8 +62,7 @@ export const getTasksApi = async (params: any = {}): Promise<GetTasksResponse> =
 
   const result = await res.json();
   if (!res.ok) throw new Error(result.error || "Failed to fetch tasks");
-
-  return result as GetTasksResponse;
+  return result;
 };
 
 export const createTaskApi = async (data: any) => {
