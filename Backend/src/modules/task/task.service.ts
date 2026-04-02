@@ -1,11 +1,28 @@
 import { prisma } from "../../config/prisma.js";
-import { Status, Priority } from "../../utils/types.js";
+import { Task } from "@prisma/client";
 
-export const createTask = async (data: any, userId: string) => {
+/**
+ * CREATE TASK
+ * Handles date conversion and default assignments
+ */
+export const createTask = async (
+  data: {
+    title: string;
+    description?: string;
+    status?: "TODO" | "IN_PROGRESS" | "DONE";
+    priority?: "LOW" | "MEDIUM" | "HIGH";
+    due_date?: string;
+    assigned_to?: string;
+  },
+  userId: string
+): Promise<Task> => {
   const assignedToId = data.assigned_to || userId;
 
-  // Validate assigned user exists
-  const assignedUser = await prisma.user.findUnique({ where: { id: assignedToId } });
+  // Verify the assigned user exists
+  const assignedUser = await prisma.user.findUnique({
+    where: { id: assignedToId },
+  });
+
   if (!assignedUser) {
     throw { status: 422, message: "Assigned user does not exist" };
   }
@@ -14,8 +31,9 @@ export const createTask = async (data: any, userId: string) => {
     data: {
       title: data.title,
       description: data.description || "",
-      status: data.status || "todo",
-      priority: data.priority || "medium",
+      status: data.status || "TODO",
+      priority: data.priority || "MEDIUM",
+      // Convert ISO string from frontend to JS Date object
       due_date: data.due_date ? new Date(data.due_date) : null,
       assigned_to: assignedToId,
       created_by: userId,
@@ -23,58 +41,116 @@ export const createTask = async (data: any, userId: string) => {
   });
 };
 
+/**
+ * GET TASKS
+ * Fixed: Removed 'mode: "insensitive"' to prevent Prisma/SQLite crashes
+ */
 export const getTasks = async (
-  page = 1,
-  limit = 10,
-  filters: Partial<{ status: Status; priority: Priority; assignedTo: string; search: string }> = {}
-) => {
+  page: number,
+  limit: number,
+  filters: {
+    status?: "TODO" | "IN_PROGRESS" | "DONE";
+    priority?: "LOW" | "MEDIUM" | "HIGH";
+    assignedTo?: string;
+    search?: string;
+  },
+  user: { userId: string; role: string }
+): Promise<{
+  tasks: Task[];
+  total: number;
+  page: number;
+  limit: number;
+}> => {
   const where: any = {};
+
+  // RBAC: Non-admins only see tasks they created or are assigned to
+  if (user.role !== "ADMIN") {
+    where.OR = [
+      { created_by: user.userId },
+      { assigned_to: user.userId },
+    ];
+  }
+
   if (filters.status) where.status = filters.status;
   if (filters.priority) where.priority = filters.priority;
   if (filters.assignedTo) where.assigned_to = filters.assignedTo;
-  if (filters.search) where.title = { contains: filters.search, mode: "insensitive" };
 
-  const tasks = await prisma.task.findMany({
-    where,
-    skip: (page - 1) * limit,
-    take: limit,
-    orderBy: { created_at: "desc" },
-  });
+  if (filters.search) {
+    where.title = {
+      contains: filters.search,
+      // REMOVED mode: "insensitive" as it is not supported on all DB providers
+    };
+  }
 
-  const total = await prisma.task.count({ where });
+  const [tasks, total] = await Promise.all([
+    prisma.task.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      // Note: check your schema.prisma - if it's createdAt (camelCase), change it here
+      orderBy: { created_at: "desc" },
+    }),
+    prisma.task.count({ where }),
+  ]);
+
   return { tasks, total, page, limit };
 };
 
-export const getTaskById = async (id: string) => {
-  const task = await prisma.task.findUnique({ where: { id } });
-  if (!task) throw { status: 404, message: "Task not found" };
-  return task;
+/**
+ * GET ONE BY ID
+ */
+export const getTaskById = async (id: string): Promise<Task | null> => {
+  return prisma.task.findUnique({ where: { id } });
 };
 
-export const updateTask = async (id: string, data: any) => {
-    // Only include the fields that exist in data
-    const updateData: any = {};
-    if (data.title !== undefined) updateData.title = data.title;
-    if (data.description !== undefined) updateData.description = data.description;
-    if (data.status !== undefined) updateData.status = data.status;
-    if (data.priority !== undefined) updateData.priority = data.priority;
-    if (data.due_date !== undefined) updateData.due_date = data.due_date ? new Date(data.due_date) : null;
-    if (data.assigned_to !== undefined) updateData.assigned_to = data.assigned_to;
+/**
+ * UPDATE TASK
+ */
+export const updateTask = async (
+  id: string,
+  data: {
+    title?: string;
+    description?: string;
+    status?: "TODO" | "IN_PROGRESS" | "DONE";
+    priority?: "LOW" | "MEDIUM" | "HIGH";
+    due_date?: string | null;
+    assigned_to?: string;
+  }
+): Promise<Task> => {
+  const updateData: any = {};
 
-    return prisma.task.update({
-      where: { id },
-      data: updateData,
-    });
-  };
+  if (data.title !== undefined) updateData.title = data.title;
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.priority !== undefined) updateData.priority = data.priority;
 
-export const deleteTask = async (id: string, userId: string, isAdmin: boolean = false) => {
-  const task = await prisma.task.findUnique({ where: { id } });
-  if (!task) throw { status: 404, message: "Task not found" };
-
-  // Only creator or admin can delete
-  if (!isAdmin && task.created_by !== userId) {
-    throw { status: 403, message: "Forbidden" };
+  if (data.due_date !== undefined) {
+    updateData.due_date = data.due_date ? new Date(data.due_date) : null;
   }
 
-  return prisma.task.delete({ where: { id } });
+  if (data.assigned_to !== undefined) {
+    const user = await prisma.user.findUnique({
+      where: { id: data.assigned_to },
+    });
+
+    if (!user) {
+      throw { status: 422, message: "Assigned user does not exist" };
+    }
+
+    updateData.assigned_to = data.assigned_to;
+  }
+
+  return prisma.task.update({
+    where: { id },
+    data: updateData,
+  });
+};
+
+/**
+ * DELETE TASK
+ */
+export const deleteTask = async (id: string): Promise<Task> => {
+  return prisma.task.delete({
+    where: { id },
+  });
 };

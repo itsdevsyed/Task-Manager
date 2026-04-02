@@ -133,7 +133,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "F:\\TaskManager\\backend\\src\\generated",
+      "value": "F:\\TaskManager\\Backend\\src\\generated",
       "fromEnvVar": null
     },
     "config": {
@@ -160,7 +160,8 @@ const config = {
     "db"
   ],
   "activeProvider": "sqlite",
-  "dataProxy": false
+  "dataProxy": false,
+  "postinstall": false
 }
 
 const fs = require('fs')

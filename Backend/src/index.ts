@@ -3,6 +3,8 @@ import cors from "cors";
 import morgan from "morgan";
 import authRoutes from "./modules/auth/auth.routes.js";
 import taskRoutes from "./modules/task/task.routes.js";
+import { errorMiddleware } from "./middlewares/error.middleware.js";
+
 
 const app = express();
 
@@ -15,6 +17,9 @@ app.get("/health", (_, res) => {
 });
 app.use("/auth", authRoutes);
 app.use("/tasks", taskRoutes);
+
+app.use(errorMiddleware);
+
 app.listen(3001, () => {
   console.log("Server running on http://localhost:3001");
 });
